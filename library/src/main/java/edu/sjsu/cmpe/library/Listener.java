@@ -23,96 +23,84 @@ import edu.sjsu.cmpe.library.repository.BookRepositoryInterface;
 
 public class Listener {
 
-    private String apolloUser;
+	private final LibraryServiceConfiguration configuration;
+    private BookRepositoryInterface bookRepository;
+    private String portNumber;
+	private String apolloUser;
     private String apolloPassword;
     private String apolloHost;
     private int apolloPort;
-    private String stompTopic;
-    private final LibraryServiceConfiguration configuration;
-    private BookRepositoryInterface bookRepository;
-    private long isbn[]= new long[3];
+    private String stompTopicName;
+    private long isbn[]= new long[3];  
     private String title[] = new String[3];
     private String category[] = new String[3];
     private String coverImage[] = new String[3];
-    private int i;
-    private String port;
+    Book bookInRepository = null;
+    long bookIsbn;
+    private int i = 0;
+    
 
     public Listener(LibraryServiceConfiguration config, BookRepositoryInterface bookRepository) {
    	 this.configuration = config;
    	 this.bookRepository = bookRepository;
-   	 apolloUser = configuration.getApolloUser();
-   	 apolloPassword = configuration.getApolloPassword();
-   	 apolloHost = configuration.getApolloHost();
-   	 apolloPort = configuration.getApolloPort();
-   	 stompTopic = configuration.getStompTopicName();
-   	 port = ""+apolloPort;
+   	 this.apolloUser = configuration.getApolloUser();
+   	 this.apolloPassword = configuration.getApolloPassword();
+   	 this.apolloHost = configuration.getApolloHost();
+   	 this.apolloPort = configuration.getApolloPort();
+   	 this.stompTopicName = configuration.getStompTopicName();
+   	 this.portNumber = ""+apolloPort;
     }
 
-    public void listenerMsg()
+    public void listenerThread()
     {
    	 while(true)
    	 {
    		 try{
-   			 System.out.println("----------Start------------");
    			 String user = env("APOLLO_USER", apolloUser);
    			 String password = env("APOLLO_PASSWORD", apolloPassword);
    			 String host = env("APOLLO_HOST", apolloHost);
-   			 int apolloport = Integer.parseInt(env("APOLLO_PORT", port));
-   			 String destination = stompTopic;
-   			 System.out.println("destination is "+destination);
-   			 StompJmsConnectionFactory factory = new StompJmsConnectionFactory();
-   			 factory.setBrokerURI("tcp://" + host + ":" + apolloport);
+   			 int apolloPortNumber = Integer.parseInt(env("APOLLO_PORT", portNumber));
+   			 //String target = stompTopicName;
+   			 StompJmsConnectionFactory factoryConnection = new StompJmsConnectionFactory();
+   			factoryConnection.setBrokerURI("tcp://" + host + ":" + apolloPortNumber);
 
-   			 Connection connection = factory.createConnection(user, password);
+   			 Connection connection = factoryConnection.createConnection(user, password);
    			 connection.start();
    			 Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-   			 Destination dest = new StompJmsDestination(destination);
+   			 Destination destination = new StompJmsDestination(stompTopicName);
 
-   			 MessageConsumer consumer = session.createConsumer(dest);
+   			 MessageConsumer consumer = session.createConsumer(destination);
    			 System.currentTimeMillis();
-   			 i=0;
-   			 System.out.println("******Waiting for messages...");
    			 while(true) {
-   				 Message msg = consumer.receive();
-   				 if( msg instanceof TextMessage ) {
-   					 String body = ((TextMessage) msg).getText();
-   					 if( "SHUTDOWN".equals(body) ) {
-   						 System.out.println("SHUTING DOWN******");
+   				 Message message = consumer.receive();		
+   				 if( message instanceof TextMessage ) {		
+   					 String messageBody = ((TextMessage) message).getText();	
+   					 if( "SHUTDOWN".equals(messageBody) ) {
    						 break;
    					 }
-   					 System.out.println("Received message = " + body);
-
-   					 StringTokenizer strf = new StringTokenizer(body,":,\"");
-   					 while(strf.hasMoreTokens())
+   					 
+   					 StringTokenizer delimitor = new StringTokenizer(messageBody,":,\"");
+   					 while(delimitor.hasMoreTokens())
    					 {
-   						 isbn[i]= Long.parseLong(strf.nextToken());
-   						 System.out.println("isbn is" + isbn[i]);
-
-   						 title[i]=strf.nextToken();
-   						 System.out.println("Title is "+title[i]);
-
-   						 category[i] = strf.nextToken();
-   						 System.out.println("Category is "+category[i]);
-
-   						 coverImage[i] = strf.nextToken()+":"+strf.nextToken();
-   						 System.out.println("Cover Image " +coverImage[i]);
+   						 isbn[i]= Long.parseLong(delimitor.nextToken());  
+   						 title[i]=delimitor.nextToken();
+   						 category[i] = delimitor.nextToken();
+   						 coverImage[i] = delimitor.nextToken()+":"+delimitor.nextToken();
    						 i++;
    					 }
 
    					 System.out.println("Text Message");
    					 if(i == 3)
    						 break;
-   				 } else if (msg instanceof StompJmsMessage) {
-   					 StompJmsMessage smsg = ((StompJmsMessage) msg);
-   					 String body = smsg.getFrame().contentAsString();
+   				 } else if (message instanceof StompJmsMessage) {		
+   					 StompJmsMessage stomopMessage = ((StompJmsMessage) message);	
+   					 String body = stomopMessage.getFrame().contentAsString();
    					 if ("SHUTDOWN".equals(body)) {
-   						 System.out.println("SHUTING DOWN..StompJmsMessage");
    						 break;
    					 }
-   					 System.out.println("Received message = " + body);
-   					 System.out.println("Stomp Message");
+   					 
    				 } else {
-   					 System.out.println("Unexpected message type: "+msg.getClass());
+   					 System.out.println("Illegal Message:"+message.getClass());	
    				 }
 
    			 }
@@ -120,44 +108,45 @@ public class Listener {
    		 }
    		 catch(JMSException e)
    		 {
+   			 e.printStackTrace();
    		 }
-   		 System.out.println("finding book...");
-   		 Book book=null;
+   		 
+   		 //Looking up for book in the bookRepository
+   		 
+   		 
 
-   		 long ib;
+   		 
    		 for(int i=0;i<3;i++)
    		 {
-   			 ib= isbn[i];
-   			 System.out.println("ib is"+ib);
-   			 if(ib!=0)
+   			bookIsbn = isbn[i];			
+   			 if(bookIsbn!=0)
    			 {
-   				 book=bookRepository.getBookByISBN(ib);
-   				 if(book!=null)
+   				bookInRepository = bookRepository.getBookByISBN(bookIsbn);
+   				 if(bookInRepository!=null)
    				 {
-   					 System.out.println("Book found");
-   					 if(book.getStatus()==Status.lost);
+   					 if(bookInRepository.getStatus()==Status.lost);
    					 {
-   						 System.out.println("isbn of book is: " + book.getIsbn());
-   						 System.out.println("title of book is: "+book.getTitle());
-   						 System.out.println("status of book is: "+book.getStatus());
-
-   						 bookRepository.updateLostToAvailable(ib,Status.available);
+   						 //Printing the book details
+   						 System.out.println("Isbn:" + bookInRepository.getIsbn() + "\nTitle:" + bookInRepository.getTitle() + "\nStatus:" + bookInRepository.getStatus());
+   						 //Update the book status
+   						 bookRepository.updateLostToAvailable(bookIsbn,Status.available);
    					 }
    				 }
+   				 //Adding the book in the repository if the book does not exist
    				 else
    				 {
-   					 Book newbook = new Book();
-   					 newbook.setStatus(Status.available);
-   					 newbook.setIsbn(isbn[i]);
-   					 newbook.setTitle(title[i]);
-   					 newbook.setCategory(category[i]);
+   					 Book newBook = new Book();
+   					 newBook.setIsbn(isbn[i]);
+   					 newBook.setTitle(title[i]);
+   					 newBook.setCategory(category[i]);
+   					 newBook.setStatus(Status.available);
    					 try {
-   						 newbook.setCoverimage(new URL(coverImage[i]));
+   						 newBook.setCoverimage(new URL(coverImage[i]));
    					 } catch (MalformedURLException e) {
    						 e.printStackTrace();
    					 }
 
-   					 bookRepository.insertNewBooks(ib, newbook);
+   					 bookRepository.insertNewBooks(bookIsbn, newBook);
    				 }
    			 }
    		 }

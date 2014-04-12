@@ -24,7 +24,6 @@ public class LibraryService extends Service<LibraryServiceConfiguration> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     public static void main(String[] args) throws Exception {
-   	 System.out.println("******in LibraryService-main()******");
    	 new LibraryService().run(args);
     }
 
@@ -39,7 +38,6 @@ public class LibraryService extends Service<LibraryServiceConfiguration> {
     public void run(LibraryServiceConfiguration configuration,
    		 Environment environment) throws Exception {
    	 // This is how you pull the configurations from library_x_config.yml
-   	 System.out.println("******in LibraryService-run()******");
    	 String queueName = configuration.getStompQueueName();
    	 String topicName = configuration.getStompTopicName();
    	 log.debug("{} - Queue name is {}. Topic name is {}",
@@ -55,22 +53,20 @@ public class LibraryService extends Service<LibraryServiceConfiguration> {
    	 /** UI Resources */
    	 environment.addResource(new HomeResource(bookRepository));
    	 
-   	 ExecutorService executor = Executors.newFixedThreadPool(1);
-   	 final Listener listener=new Listener(configuration, bookRepository);
-   	 Runnable backgroundTask = new Runnable() {
+   	 ExecutorService serviceExecutor = Executors.newFixedThreadPool(1);
+   	 final Listener objectListener = new Listener(configuration, bookRepository);
+   	 Runnable backgroundThread = new Runnable() {
 
-   		 @Override
    		 public void run() {
-
    			 try{
-   				 listener.listenerMsg();
-   			 }
+   				 	objectListener.listenerThread();
+   			 	}
    			 catch(Exception e)
-   			 {
-   				 e.printStackTrace();
-   			 }
-   		 }
+   			 	{
+   				 	e.printStackTrace();
+   			 	}
+   		 	}
    	 };
-   	 executor.execute(backgroundTask);
+   	serviceExecutor.execute(backgroundThread);
     }
 }
